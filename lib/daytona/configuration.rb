@@ -3,8 +3,6 @@
 # Copyright 2025 Daytona Platforms Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-require "dotenv"
-
 module Daytona
   # Configuration options for initializing the Daytona client.
   #
@@ -61,8 +59,6 @@ module Daytona
       target: nil,
       server_url: nil
     )
-      load_dotenv_files
-
       # Handle deprecated server_url
       if server_url
         warn "[DEPRECATION] `server_url` is deprecated. Please use `api_url` instead."
@@ -127,16 +123,6 @@ module Daytona
         api_url: @api_url,
         target: @target,
       }
-    end
-
-    private
-
-    def load_dotenv_files
-      # Load .env files in order of precedence (later files override earlier ones)
-      Dotenv.load(".env", ".env.local") if defined?(Dotenv)
-    rescue StandardError
-      # Ignore dotenv loading errors (files may not exist)
-      nil
     end
   end
 end

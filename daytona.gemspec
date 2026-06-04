@@ -31,7 +31,6 @@ Gem::Specification.new do |spec|
   spec.add_dependency "faraday", "~> 2.0"
   spec.add_dependency "faraday-multipart", "~> 1.0"
   spec.add_dependency "websocket-client-simple", "~> 0.8"
-  spec.add_dependency "dotenv", "~> 3.0"
 
   # Development dependencies are in Gemfile
 end
