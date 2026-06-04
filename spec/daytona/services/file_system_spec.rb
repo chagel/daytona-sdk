@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "tempfile"
+
 RSpec.describe Daytona::Services::FileSystem do
   let(:base_url) { "https://api.daytona.io" }
   let(:api_key) { "test-api-key" }
@@ -106,6 +108,43 @@ RSpec.describe Daytona::Services::FileSystem do
         .with(query: { path: "/root/pi-extensions/web-tools.ts" }) do |req|
           req.headers["Content-Type"].to_s.start_with?("multipart/form-data")
         end
+    end
+
+    # write_file must never run the content through File.exist? (the old
+    # path-vs-content guess), which raises "path name contains null byte" on
+    # binary content.
+    it "uploads binary content containing a null byte" do
+      url = "#{toolbox}/files/upload"
+      stub_request(:post, url).with(query: { path: "/root/probe.bin" }).to_return(json("{}"))
+
+      expect { build.write_file("/root/probe.bin", "PK\x03\x04\x00data\x00".b) }.not_to raise_error
+
+      expect(WebMock).to have_requested(:post, url).with(query: { path: "/root/probe.bin" })
+    end
+  end
+
+  describe "#upload_file" do
+    it "treats a real local path as a file upload" do
+      file = Tempfile.new("daytona-upload")
+      file.write("local-bytes")
+      file.flush
+      url = "#{toolbox}/files/upload"
+      stub_request(:post, url).with(query: { path: "/root/dest.txt" }).to_return(json("{}"))
+
+      build.upload_file(file.path, "/root/dest.txt")
+
+      expect(WebMock).to have_requested(:post, url).with(query: { path: "/root/dest.txt" })
+    ensure
+      file&.close!
+    end
+
+    it "treats null-byte content as content, not a path" do
+      url = "#{toolbox}/files/upload"
+      stub_request(:post, url).with(query: { path: "/root/dest.bin" }).to_return(json("{}"))
+
+      expect { build.upload_file("raw\x00bytes".b, "/root/dest.bin") }.not_to raise_error
+
+      expect(WebMock).to have_requested(:post, url).with(query: { path: "/root/dest.bin" })
     end
   end
 end

@@ -204,10 +204,10 @@ module Daytona
       def upload_file(source, destination, timeout: 1800)
         encoded_path = URI.encode_www_form_component(destination)
 
-        if File.exist?(source)
+        if local_file_path?(source)
           toolbox_upload("/files/upload?path=#{encoded_path}", file_path: source, timeout: timeout)
         else
-          # Source is content string
+          # Source is content (possibly binary) rather than a local path.
           toolbox_client.upload_bytes(
             "/files/upload?path=#{encoded_path}",
             content: source,
@@ -253,7 +253,29 @@ module Daytona
       # @example
       #   sandbox.fs.write_file("/home/user/output.txt", "Hello, World!")
       def write_file(path, content, timeout: 1800)
-        upload_file(content, path, timeout: timeout)
+        encoded_path = URI.encode_www_form_component(path)
+        # write_file is always given content, never a local path — upload the
+        # bytes directly so binary content (which would make File.exist? raise
+        # "path name contains null byte") is handled.
+        toolbox_client.upload_bytes(
+          "/files/upload?path=#{encoded_path}",
+          content: content,
+          filename: File.basename(path),
+          timeout: timeout
+        )
+      end
+
+      private
+
+      # True only when source is a real local file path. File.exist? raises
+      # ArgumentError on a content string containing a null byte (and
+      # Errno::ENAMETOOLONG on an over-long one); both mean "not a path".
+      def local_file_path?(source)
+        return false unless source.is_a?(String)
+
+        File.exist?(source)
+      rescue SystemCallError, ArgumentError
+        false
       end
     end
   end
