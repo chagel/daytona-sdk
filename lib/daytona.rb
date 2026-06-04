@@ -7,6 +7,7 @@
 require_relative "daytona/version"
 require_relative "daytona/errors"
 require_relative "daytona/configuration"
+require_relative "daytona/util"
 
 # API layer
 require_relative "daytona/api/http_client"

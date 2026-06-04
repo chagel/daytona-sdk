@@ -3,6 +3,9 @@
 # Copyright 2025 Daytona Platforms Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+require "uri"
+require "websocket-client-simple"
+
 module Daytona
   module Services
     # Process execution for Sandbox
@@ -18,6 +21,20 @@ module Daytona
     #   response = sandbox.process.code_run("print('Hello')", language: "python")
     #   puts response.result
     class Process < BaseService
+      # Port the toolbox daemon's preview proxy listens on; the follow-logs
+      # WebSocket is reached through the sandbox's preview URL for this port.
+      WS_PORT = 2280
+
+      # @param http_client [API::HttpClient] HTTP client
+      # @param sandbox_id [String] Sandbox ID
+      # @param get_toolbox_url [Proc] Function returning the toolbox base URL
+      # @param get_preview_link [Proc, nil] Function (port) -> preview URL info,
+      #   required only for #get_session_command_logs_async
+      def initialize(http_client:, sandbox_id:, get_toolbox_url:, get_preview_link: nil)
+        super(http_client: http_client, sandbox_id: sandbox_id, get_toolbox_url: get_toolbox_url)
+        @get_preview_link = get_preview_link
+      end
+
       # Execute a shell command
       #
       # @param command [String] Command to execute
@@ -136,6 +153,68 @@ module Daytona
         toolbox_delete("/process/session/#{session_id}")
       end
 
+      # Send input data to the stdin of a running session command.
+      #
+      # Use with a command started via {#execute_session_command} with
+      # +runAsync: true+ to drive an interactive process (e.g. one reading
+      # JSON-RPC from stdin).
+      #
+      # @param session_id [String] Session identifier
+      # @param command_id [String] Command identifier (cmd_id from the exec response)
+      # @param data [String] Bytes to write to the command's stdin
+      # @return [Hash, nil] API response
+      def send_session_command_input(session_id, command_id, data)
+        toolbox_post(
+          "/process/session/#{session_id}/command/#{command_id}/input",
+          body: { data: data }
+        )
+      end
+
+      # Stream a session command's logs as they are produced, demultiplexing
+      # the combined follow stream into stdout/stderr callbacks. Blocks until
+      # the command exits and the stream closes.
+      #
+      # Reaches the toolbox daemon's follow endpoint over a WebSocket via the
+      # sandbox's preview URL for {WS_PORT}; +get_preview_link+ must have been
+      # supplied when the service was constructed.
+      #
+      # @param session_id [String] Session identifier
+      # @param command_id [String] Command identifier (cmd_id from the exec response)
+      # @param on_stdout [Proc] Called with each stdout chunk (String)
+      # @param on_stderr [Proc] Called with each stderr chunk (String)
+      # @return [void]
+      def get_session_command_logs_async(session_id, command_id, on_stdout:, on_stderr:)
+        raise Daytona::DaytonaError, "get_preview_link is required for log streaming" unless @get_preview_link
+
+        preview = @get_preview_link.call(WS_PORT)
+        uri = URI.parse(preview_url(preview))
+        uri.scheme = uri.scheme == "https" ? "wss" : "ws"
+        uri.path = "/process/session/#{session_id}/command/#{command_id}/logs"
+        uri.query = "follow=true"
+
+        completion = Queue.new
+        headers = { "Content-Type" => "text/plain", "Accept" => "text/plain" }
+        token = preview_token(preview)
+        headers["X-Daytona-Preview-Token"] = token if token
+
+        ws = WebSocket::Client::Simple.connect(uri.to_s, headers: headers)
+        ws.on(:message) do |message|
+          if message.type == :close
+            ws.close
+            completion.push(:close)
+          else
+            stdout, stderr = Util.demux(message.data.to_s)
+            on_stdout.call(stdout) unless stdout.empty?
+            on_stderr.call(stderr) unless stderr.empty?
+          end
+        end
+        ws.on(:close) { completion.push(:close) }
+        ws.on(:error) { |_e| completion.push(:error) }
+
+        completion.pop
+        nil
+      end
+
       # Create a PTY (pseudo-terminal) session
       #
       # @param id [String] PTY session identifier
@@ -196,6 +275,26 @@ module Daytona
       # @param pty_size [Hash] New size { cols:, rows: }
       def resize_pty_session(session_id, pty_size)
         toolbox_post("/pty/#{session_id}/resize", body: pty_size)
+      end
+
+      private
+
+      # A preview link is a Hash from the REST API ({ "url", "token" }) — read
+      # the URL tolerantly of string/symbol keys or an object response.
+      def preview_url(preview)
+        if preview.is_a?(Hash)
+          preview["url"] || preview[:url]
+        else
+          preview.url
+        end
+      end
+
+      def preview_token(preview)
+        if preview.is_a?(Hash)
+          preview["token"] || preview[:token]
+        elsif preview.respond_to?(:token)
+          preview.token
+        end
       end
     end
   end

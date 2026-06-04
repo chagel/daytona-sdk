@@ -421,7 +421,8 @@ module Daytona
       @process = Services::Process.new(
         http_client: @http_client,
         sandbox_id: @id,
-        get_toolbox_url: @get_toolbox_url
+        get_toolbox_url: @get_toolbox_url,
+        get_preview_link: method(:get_preview_link)
       )
 
       @computer_use = Services::ComputerUse.new(

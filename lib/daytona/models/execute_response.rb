@@ -85,11 +85,16 @@ module Daytona
       # @return [Boolean, nil] Whether to enable PTY
       attr_accessor :pty
 
-      def initialize(command:, run_async: nil, cwd: nil, pty: nil)
+      # @return [Boolean, nil] Whether to suppress echoing of stdin (sent via
+      #   Process#send_session_command_input) back into the command's output
+      attr_accessor :suppress_input_echo
+
+      def initialize(command:, run_async: nil, cwd: nil, pty: nil, suppress_input_echo: nil)
         @command = command
         @run_async = run_async
         @cwd = cwd
         @pty = pty
+        @suppress_input_echo = suppress_input_echo
       end
 
       # Convert to hash for API requests
@@ -101,6 +106,7 @@ module Daytona
           runAsync: @run_async,
           cwd: @cwd,
           pty: @pty,
+          suppressInputEcho: @suppress_input_echo,
         }.compact
       end
     end
