@@ -27,7 +27,7 @@ module Daytona
       # @example
       #   sandbox.fs.create_folder("/home/user/new_dir", "0755")
       def create_folder(path, mode = "0755")
-        toolbox_post("/filesystem/folder", body: { path: path, mode: mode })
+        toolbox_post("/files/folder", body: { path: path, mode: mode })
       end
 
       # Delete a file or directory
@@ -41,7 +41,7 @@ module Daytona
       def delete_file(path, recursive: false)
         params = { path: path }
         params[:recursive] = "true" if recursive
-        toolbox_delete("/filesystem?#{URI.encode_www_form(params)}")
+        toolbox_delete("/files?#{URI.encode_www_form(params)}")
       end
 
       # Download a file
@@ -59,7 +59,7 @@ module Daytona
       #   content = sandbox.fs.download_file("/home/user/file.txt")
       def download_file(remote_path, local_path = nil, timeout: 1800)
         encoded_path = URI.encode_www_form_component(remote_path)
-        content = toolbox_download("/filesystem/download?path=#{encoded_path}", timeout: timeout)
+        content = toolbox_download("/files/download?path=#{encoded_path}", timeout: timeout)
 
         if local_path
           File.binwrite(local_path, content)
@@ -94,7 +94,7 @@ module Daytona
       # @example
       #   results = sandbox.fs.find_files("/home/user/project", "TODO")
       def find_files(path, pattern)
-        response = toolbox_get("/filesystem/find", params: { path: path, pattern: pattern })
+        response = toolbox_get("/files/find", params: { path: path, pattern: pattern })
         response["matches"] || response[:matches] || []
       end
 
@@ -108,7 +108,7 @@ module Daytona
       #   puts "Size: #{info['size']}"
       def get_file_info(path)
         encoded_path = URI.encode_www_form_component(path)
-        toolbox_get("/filesystem/info?path=#{encoded_path}")
+        toolbox_get("/files/info?path=#{encoded_path}")
       end
 
       # List files in a directory
@@ -121,7 +121,7 @@ module Daytona
       #   files.each { |f| puts f['name'] }
       def list_files(path)
         encoded_path = URI.encode_www_form_component(path)
-        response = toolbox_get("/filesystem?path=#{encoded_path}")
+        response = toolbox_get("/files?path=#{encoded_path}")
         response["entries"] || response[:entries] || []
       end
 
@@ -133,7 +133,7 @@ module Daytona
       # @example
       #   sandbox.fs.move_files("/home/user/old.txt", "/home/user/new.txt")
       def move_files(source, destination)
-        toolbox_post("/filesystem/move", body: { source: source, destination: destination })
+        toolbox_post("/files/move", body: { source: source, destination: destination })
       end
 
       # Replace text in files
@@ -150,7 +150,7 @@ module Daytona
       #     "new_text"
       #   )
       def replace_in_files(files, pattern, new_value)
-        toolbox_post("/filesystem/replace", body: {
+        toolbox_post("/files/replace", body: {
           files: files,
           pattern: pattern,
           newValue: new_value,
@@ -166,7 +166,7 @@ module Daytona
       # @example
       #   files = sandbox.fs.search_files("/home/user", "*.rb")
       def search_files(path, pattern)
-        response = toolbox_get("/filesystem/search", params: { path: path, pattern: pattern })
+        response = toolbox_get("/files/search", params: { path: path, pattern: pattern })
         response["files"] || response[:files] || []
       end
 
@@ -184,7 +184,7 @@ module Daytona
         body[:mode] = mode if mode
         body[:owner] = owner if owner
         body[:group] = group if group
-        toolbox_post("/filesystem/permissions", body: body)
+        toolbox_post("/files/permissions", body: body)
       end
 
       # Upload a file
@@ -203,11 +203,11 @@ module Daytona
         encoded_path = URI.encode_www_form_component(destination)
 
         if File.exist?(source)
-          toolbox_upload("/filesystem/upload?path=#{encoded_path}", file_path: source, timeout: timeout)
+          toolbox_upload("/files/upload?path=#{encoded_path}", file_path: source, timeout: timeout)
         else
           # Source is content string
           toolbox_client.upload_bytes(
-            "/filesystem/upload?path=#{encoded_path}",
+            "/files/upload?path=#{encoded_path}",
             content: source,
             filename: File.basename(destination),
             timeout: timeout
