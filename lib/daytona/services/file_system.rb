@@ -107,8 +107,7 @@ module Daytona
       #   info = sandbox.fs.get_file_info("/home/user/file.txt")
       #   puts "Size: #{info['size']}"
       def get_file_info(path)
-        encoded_path = URI.encode_www_form_component(path)
-        toolbox_get("/files/info?path=#{encoded_path}")
+        toolbox_get("/files/info", params: { path: path })
       end
 
       # List files in a directory
@@ -120,8 +119,11 @@ module Daytona
       #   files = sandbox.fs.list_files("/home/user")
       #   files.each { |f| puts f['name'] }
       def list_files(path)
-        encoded_path = URI.encode_www_form_component(path)
-        response = toolbox_get("/files?path=#{encoded_path}")
+        response = toolbox_get("/files", params: { path: path })
+        # The toolbox returns a bare JSON array of entries; older builds
+        # wrapped them in { entries: [...] }.
+        return response if response.is_a?(Array)
+
         response["entries"] || response[:entries] || []
       end
 
