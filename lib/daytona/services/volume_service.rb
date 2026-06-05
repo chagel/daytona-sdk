@@ -30,8 +30,10 @@ module Daytona
       #   volumes.each { |v| puts "#{v.name}: #{v.state}" }
       def list
         response = @http_client.get("/volumes")
-        items = response["items"] || response[:items] || response
-        items = [items] unless items.is_a?(Array)
+        # The endpoint returns a bare JSON array; older builds wrapped it in
+        # { items: [...] }. Indexing a String key into an Array raises, so
+        # branch on the type before reaching for :items.
+        items = response.is_a?(Array) ? response : (response["items"] || response[:items] || [])
         items.map { |v| Models::Volume.from_hash(v) }
       end
 
