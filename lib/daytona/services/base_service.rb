@@ -22,19 +22,20 @@ module Daytona
 
       protected
 
-      # Ensure toolbox URL is initialized
+      # Ensure toolbox URL is initialized.
       #
-      # The toolbox API is accessed through the main API at:
-      #   {api_base}/toolbox/{sandbox_id}/toolbox
-      #
-      # NOT through the proxyToolboxUrl which is for port forwarding
+      # Toolbox calls go through the runner's toolbox proxy, addressed per
+      # sandbox: {proxyToolboxUrl}/{sandbox_id} (e.g.
+      # https://proxy.app.daytona.io/toolbox/<id>). @get_toolbox_url returns the
+      # proxy base; we append the sandbox id, matching Sandbox#ensure_toolbox_url!.
+      # The legacy {api_base}/toolbox/{id}/toolbox gateway still serves some
+      # routes but 404s newer ones (e.g. session command input).
       def ensure_toolbox_url!
         return if @toolbox_url
 
-        # Build toolbox URL from the main API base URL
-        # The path is: /toolbox/{sandbox_id}/toolbox
-        api_base = @http_client.base_url
-        @toolbox_url = "#{api_base}toolbox/#{@sandbox_id}/toolbox"
+        base = @get_toolbox_url.call
+        base = "#{base}/" unless base.end_with?("/")
+        @toolbox_url = "#{base}#{@sandbox_id}"
       end
 
       # Get toolbox HTTP client

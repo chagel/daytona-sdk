@@ -6,16 +6,31 @@ RSpec.describe Daytona::Services::FileSystem do
   let(:base_url) { "https://api.daytona.io" }
   let(:api_key) { "test-api-key" }
   let(:http_client) { Daytona::API::HttpClient.new(base_url: base_url, api_key: api_key) }
-  # base_service builds the toolbox URL from the http_client base_url:
-  #   {base}/toolbox/{sandbox_id}/toolbox
-  let(:toolbox) { "#{base_url}/toolbox/sbx1/toolbox" }
+  # base_service builds the toolbox URL from the proxy base + sandbox id:
+  #   {proxyToolboxUrl}/{sandbox_id}
+  let(:proxy) { "https://proxy.example/toolbox" }
+  let(:toolbox) { "#{proxy}/sbx1" }
 
   def build
-    described_class.new(http_client: http_client, sandbox_id: "sbx1", get_toolbox_url: -> { "unused" })
+    described_class.new(http_client: http_client, sandbox_id: "sbx1", get_toolbox_url: -> { proxy })
   end
 
   def json(body)
     { status: 200, body: body, headers: { "Content-Type" => "application/json" } }
+  end
+
+  # Toolbox calls must address the runner proxy ({proxyToolboxUrl}/{id}), not
+  # the legacy {api_base}/toolbox/{id}/toolbox gateway, which 404s newer routes.
+  describe "toolbox base url" do
+    it "is {proxyToolboxUrl}/{sandbox_id}" do
+      url = "#{proxy}/sbx1/files/info"
+      stub_request(:get, url).with(query: { path: "/x" }).to_return(json("{}"))
+
+      build.get_file_info("/x")
+
+      expect(WebMock).to have_requested(:get, url).with(query: { path: "/x" })
+      expect(WebMock).not_to have_requested(:get, %r{/toolbox/sbx1/toolbox/})
+    end
   end
 
   # The toolbox routes are /files/*, NOT /filesystem/* — Daytona renamed them

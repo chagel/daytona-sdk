@@ -5,15 +5,16 @@ RSpec.describe Daytona::Services::Process do
   let(:api_key) { "test-api-key" }
   let(:http_client) { Daytona::API::HttpClient.new(base_url: base_url, api_key: api_key) }
   let(:preview) { { "url" => "https://preview.example/", "token" => "tok" } }
-  # base_service builds the toolbox URL from the http_client base_url:
-  #   {base}/toolbox/{sandbox_id}/toolbox
-  let(:toolbox) { "#{base_url}/toolbox/sbx1/toolbox" }
+  # base_service builds the toolbox URL from the proxy base + sandbox id:
+  #   {proxyToolboxUrl}/{sandbox_id}
+  let(:proxy) { "https://proxy.example/toolbox" }
+  let(:toolbox) { "#{proxy}/sbx1" }
 
   def build(get_preview_link: ->(_port) { preview })
     described_class.new(
       http_client: http_client,
       sandbox_id: "sbx1",
-      get_toolbox_url: -> { "unused" },
+      get_toolbox_url: -> { proxy },
       get_preview_link: get_preview_link
     )
   end
