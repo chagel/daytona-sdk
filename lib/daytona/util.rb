@@ -56,5 +56,64 @@ module Daytona
 
       [out_parts.join, err_parts.join]
     end
+
+    # Stateful demultiplexer for the toolbox follow stream.
+    #
+    # The daemon tags runs of stdout/stderr with 3-byte prefixes, but a single
+    # run can span multiple WebSocket frames: continuation frames carry no
+    # prefix and must be attributed to the run still in progress, and a prefix
+    # can itself be split across frames. #demux is stateless — fed a
+    # continuation frame it resets to stdout and drops the leading bytes — so
+    # large outputs (pi's message_update objects) get truncated. Demuxer keeps
+    # the current stream and any partial trailing prefix across #feed calls.
+    class Demuxer
+      def initialize
+        @stream = :stdout
+        @pending = "".b
+      end
+
+      # Feed one frame's bytes; returns [stdout, stderr] for this frame.
+      def feed(data)
+        buf = @pending + data.to_s.b
+        @pending = "".b
+        out = "".b
+        err = "".b
+        pos = 0
+        len = buf.bytesize
+
+        while pos < len
+          si = buf.index(STDOUT_PREFIX, pos)
+          ei = buf.index(STDERR_PREFIX, pos)
+          nxt = [ si, ei ].compact.min
+
+          if nxt.nil?
+            tail = buf.byteslice(pos, len - pos)
+            hold = trailing_partial_prefix_len(tail)
+            (@stream == :stderr ? err : out) << (hold.zero? ? tail : tail.byteslice(0, tail.bytesize - hold))
+            @pending = tail.byteslice(tail.bytesize - hold, hold) if hold.positive?
+            break
+          end
+
+          (@stream == :stderr ? err : out) << buf.byteslice(pos, nxt - pos) if nxt > pos
+          @stream = nxt == si ? :stdout : :stderr
+          pos = nxt + PREFIX_LEN
+        end
+
+        [ out, err ]
+      end
+
+      private
+
+      # Length (0–2) of the trailing bytes that could be the start of a 3-byte
+      # delimiter split across the frame boundary, to hold until the next feed.
+      def trailing_partial_prefix_len(tail)
+        n = tail.bytesize
+        [ 2, n ].min.downto(1) do |k|
+          chunk = tail.byteslice(n - k, k)
+          return k if STDOUT_PREFIX.start_with?(chunk) || STDERR_PREFIX.start_with?(chunk)
+        end
+        0
+      end
+    end
   end
 end

@@ -204,13 +204,18 @@ module Daytona
         token = preview_token(preview)
         headers["X-Daytona-Preview-Token"] = token if token
 
+        # A stdout/stderr run can span several WebSocket frames; the demuxer
+        # carries the current stream (and any prefix split across frames) across
+        # messages so continuation frames are not dropped (Util.demux is
+        # stateless and would discard them).
+        demuxer = Util::Demuxer.new
         ws = WebSocket::Client::Simple.connect(uri.to_s, headers: headers)
         ws.on(:message) do |message|
           if message.type == :close
             ws.close
             completion.push(:close)
           else
-            stdout, stderr = Util.demux(message.data.to_s)
+            stdout, stderr = demuxer.feed(message.data)
             on_stdout.call(stdout) unless stdout.empty?
             on_stderr.call(stderr) unless stderr.empty?
           end
