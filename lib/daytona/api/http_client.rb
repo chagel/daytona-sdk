@@ -5,6 +5,7 @@
 
 require "faraday"
 require "faraday/multipart"
+require "faraday/net_http_persistent"
 require "json"
 require "stringio"
 
@@ -195,7 +196,7 @@ module Daytona
         Faraday.new(url: @base_url, ssl: ssl_options) do |conn|
           conn.request :json
           conn.response :json, content_type: /\bjson$/
-          conn.adapter Faraday.default_adapter
+          conn.adapter :net_http_persistent
 
           conn.headers["Authorization"] = "Bearer #{auth_token}"
           conn.headers["Content-Type"] = "application/json"
@@ -213,7 +214,7 @@ module Daytona
         @multipart_connection ||= Faraday.new(url: @base_url) do |conn|
           conn.request :multipart
           conn.response :json, content_type: /\bjson$/
-          conn.adapter Faraday.default_adapter
+          conn.adapter :net_http_persistent
 
           conn.headers["Authorization"] = "Bearer #{auth_token}"
           conn.headers["Accept"] = "application/json"
