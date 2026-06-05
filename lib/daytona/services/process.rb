@@ -193,7 +193,14 @@ module Daytona
         uri.query = "follow=true"
 
         completion = Queue.new
-        headers = { "Content-Type" => "text/plain", "Accept" => "text/plain" }
+        # The daemon only multiplexes this follow stream with the demux prefixes
+        # Util.demux parses for clients advertising X-Daytona-SDK-Version
+        # >= 0.167.0; below that it streams plain text and demux drops it.
+        headers = {
+          "Content-Type" => "text/plain",
+          "Accept" => "text/plain",
+          "X-Daytona-SDK-Version" => Daytona::VERSION
+        }
         token = preview_token(preview)
         headers["X-Daytona-Preview-Token"] = token if token
 

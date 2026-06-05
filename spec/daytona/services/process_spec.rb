@@ -93,6 +93,9 @@ RSpec.describe Daytona::Services::Process do
       expect(errs.join).to eq("boom")
       expect(fake.url).to eq("wss://preview.example/process/session/s1/command/c1/logs?follow=true")
       expect(fake.headers["X-Daytona-Preview-Token"]).to eq("tok")
+      # Without a >= 0.167.0 SDK version the daemon streams plain text and the
+      # demux above drops every byte.
+      expect(fake.headers["X-Daytona-SDK-Version"]).to eq(Daytona::VERSION)
     end
 
     it "stops streaming when it receives a close-type message" do
